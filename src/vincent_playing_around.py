@@ -7,7 +7,7 @@
 
 # 
 
-# In[1]:
+# In[2]:
 
 get_ipython().magic('matplotlib inline')
 
@@ -15,17 +15,23 @@ import pandas as pd
 import statsmodels.formula.api as smf
 import matplotlib.pylab as plt
 import csv
+import folium
 from pylab import *
 
 
-# In[2]:
+# In[19]:
+
+pd.set_option('display.max_columns', None)
+
+
+# In[6]:
 
 df = pd.read_excel('./data/FOIA - 504 (FY1991-Present).xlsx', converters={'BorrZip':str})
 
 
-# In[3]:
+# In[7]:
 
-df.head()
+df.shape
 
 
 # In[4]:
@@ -231,6 +237,143 @@ max_births = max(births.values())
 # In[59]:
 
 births
+
+
+# In[2]:
+
+import folium
+map_osm = folium.Map(location=[45.5236, -122.6750])
+map_osm.save('osm.html')
+
+
+# In[3]:
+
+map_2 = folium.Map(location=[40, -99], zoom_start=4)
+map_2.geo_json(geo_path=county_geo, data_out='data2.json', data=df,
+               columns=['GEO_ID', 'Unemployment_rate_2011'],
+               key_on='feature.id',
+               threshold_scale=[0, 5, 7, 9, 11, 13],
+               fill_color='YlGnBu', line_opacity=0.3,
+               legend_name='Unemployment Rate 2011 (%)',
+               topojson='objects.us_counties_20m')
+map_2.create_map(path='map_2.html')
+
+
+# # Exploring Clean Data Set
+
+# In[56]:
+
+fips = {
+    'county_name': ['SANTA CLARA',
+                    'ALAMEDA',          
+                    'SAN FRANCISCO',    
+                    'CONTRA COSTA',     
+                    'SAN MATEO',        
+                    'SONOMA',           
+                    'SANTA CRUZ',       
+                    'MARIN',            
+                    'SOLANO',           
+                    'NAPA',             
+                    'HUMBOLDT',         
+                    'MENDOCINO',        
+                    'LAKE',
+                    'DEL NORTE'],
+    'fips': ['085',
+             '001',
+             '075',
+             '013',
+             '081',
+             '097',
+             '087',
+             '041',
+             '095',
+             '055',
+             '023',
+             '045',
+             '033',
+             '015',]
+}
+
+
+# In[57]:
+
+fips = pd.DataFrame(fips)
+
+
+# In[58]:
+
+fips.head()
+
+
+# In[59]:
+
+businesses = pd.read_csv('./data/cbp14co.txt', dtype={'fipscty': str})
+
+
+# In[60]:
+
+businesses.head()
+
+
+# In[ ]:
+
+#subset to only the counties we care about
+businesses = businesses.merge(fips, left_on=['fipscty'], right_on=['fips'])
+
+
+# In[ ]:
+
+df[['ProjectCounty', 'ApprovalYear', 'was_approved']].groupby(['ProjectCounty', 'ApprovalYear']).agg(['count'])
+
+
+# In[61]:
+
+df = pd.read_csv('./data/SFDO_504_7A-clean.csv', dtype={'BorrZip': str}, parse_dates=['ApprovalDate'])
+
+
+# In[62]:
+
+df['ApprovalYear'] = pd.DatetimeIndex(df['ApprovalDate']).year.astype(int)
+
+
+# In[63]:
+
+df = df.merge(fips, left_on=['ProjectCounty'], right_on=['county_name'])
+
+
+# In[ ]:
+
+df = df.merge(businesses[['fipscty', 'est']], left_on=['fips'], right_on=['fipscty'])
+
+
+# In[64]:
+
+df.head()
+
+
+# In[33]:
+
+df.columns
+
+
+# In[34]:
+
+df['was_approved'] = pd.notnull(df.ApprovalDate)
+
+
+# In[41]:
+
+df.ProjectCounty.value_counts()
+
+
+# In[25]:
+
+df.groupby(df['LoanStatus']).describe()
+
+
+# In[40]:
+
+df[['ProjectCounty', 'ApprovalYear', 'was_approved']].groupby(['ProjectCounty', 'ApprovalYear']).agg(['count'])
 
 
 # In[ ]:
