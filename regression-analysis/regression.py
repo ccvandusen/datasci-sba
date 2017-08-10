@@ -8,56 +8,72 @@ import os
 
 def import_data():
     '''
-    INPUT: string of filepath to csv data filepath
     OUTPUT: pandas dataframe
 
-    Use this function to read in the SBA data. I hardcoded the approval date to a
-    datetime object, so this function will only work on the SBA dataframe.
+    Use this function to read in the SBA data. If running on your computer, you need to change the key
+    to your own enviornment variable that has the database's address
     '''
     key = os.getenv('SBA_DWH')
     engine = sq.create_engine(key)
-    return engine
-
-
-def feature_engineer(df):
-    #Do stuff here
+    with engine.begin() as conn:
+        df = pd.read_sql_table('sba_sfdo', conn, schema='stg_analytics')
     return df
 
 
-def dummify_variables(df, var_names):
+def feature_engineer(df):
+    # Do stuff here
+    return engineered_df
+
+
+def dummify_variables(df):
     '''
     INPUT: pandas df from import_data fxn
-           list of column names to dummify
     OUTPUT: pandas df with dummified variables from list
+
+    Feel free to add more variables to dummify
     '''
-    if 'grade' in var_names:
-        grade_dummies = pd.get_dummies(
-            pd.cut(df['grade'], bins=[0, 4, 7, 10, 13]))
-        grade_dummies.columns = ['low_grade',
-                                 'mid_grade', 'high_grade', 'higher_grade']
-
-    return df.join(grade_dummies).drop(['grade', 'low_grade'], axis=1)
+    df['is_7a_loan'] = pd.get_dummies(df['program'],drop_first=True)
+    df.drop('program', axis=1, inplace=True)
+    return dummified_df
 
 
-def train_model(data, dropped_columns, print_summary=False):
-    y = data['Success']
-    X = data.drop(dropped_columns, axis=1)
+def create_x_y(df, dropped_columns):
+    '''
+    INPUT: pandads dataframe from dummify_variables fxn,
+    list of strings that are column names of columns to drop
+    OUTPUT: feature matrix X and response vector y
+    '''
+    y = df['Success']
+    df.drop(df['Success'], axis=1, inplace=True)
+    X = df.drop(dropped_columns, axis=1)
+    return X, y
+
+
+def train_model(X, y, dropped_columns, print_summary=False):
+    '''
+    INPUT: pandas dataframes containing the target column y and the feature matrix X,
+    list of strings containing column names that weren't dropped earlier in the pipeline,
+    and optional boolean argument to print out the model summary
+    OUTPUT: fitted logistic regression model
+
+    This function takes in the X and y dataframes created from fxn create_x_y
+    '''
     X = sm.add_constant(X)
     model = sm.Logit(y, X)
-    trained_model = model.fit()
+    fitted_model = model.fit()
     if print_summary:
-        print trained_model.summary()
-    else:
-        return trained_model
+        print fitted_model.summary()
+    return fitted_model
 
 if __name__ == '__main__':
-    #dropped_columns=['Unnamed: 0', 'Column', 'BorrName', 'BorrStreet', 'BorrCity', 'BorrState',\
-    # 'BankStreet', 'BankCity', 'BankState', 'SBADistrictOffice', 'ProjectState', 'ProjectCounty',\
-    #  'ThirdPartyLender_State', 'ThirdPartyLender_Name', 'ThirdPartyLender_City', 'ChargeOffDate']
-    engine = import_data()
-    print engine.table_names()
-    with engine.begin() as conn:
-        df = pd.read_sql_table('sba_sfdo', conn, schema='stg_analytics')
-    print len(df)
-    #print df.describe()
-    # train_model(SBA_data, print_summary=True)
+    dropped_columns=['borr_name', 'borr_street', 'borr_city', 'borr_state',\
+     'bank_street', 'bank_city', 'bank_state', 'sba_district_office', 'project_state',\
+     'third_party_lender_state', 'cdc_street', 'cdc_state']
+
+    original_SBA_data = import_data()
+
+    dummified_df = dummify_variables(df)
+
+    X, y = create_x_y(dummified_df, dropped_columns)
+
+    train_model(SBA_data, print_summary=True)
